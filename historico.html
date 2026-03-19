@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Histórico de Produção</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f7fb;
+      padding: 20px;
+      margin: 0;
+    }
+
+    h2 {
+      margin-bottom: 14px;
+    }
+
+    .msg {
+      margin: 10px 0 16px;
+      font-weight: bold;
+    }
+
+    .ok { color: #198754; }
+    .erro { color: #b02a37; }
+    .info { color: #0a58ca; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+
+    th {
+      background: #0d6efd;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h2>Histórico de Produção</h2>
+  <div id="msg" class="msg info">Carregando...</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Usuário</th>
+        <th>Obra</th>
+        <th>Bloco</th>
+        <th>Serviço</th>
+        <th>Quantidade</th>
+      </tr>
+    </thead>
+    <tbody id="tabela"></tbody>
+  </table>
+
+  <script>
+    const supabaseClient = window.supabase.createClient(
+      "https://mhgcuzltxwkzezonqcyz.supabase.co",
+      "sb_publishable_aUXMKggmg99icSo5hRUZUg_2WF_qdEA"
+    );
+
+    const msg = document.getElementById("msg");
+    const tabela = document.getElementById("tabela");
+
+    function setMsg(texto, tipo = "info") {
+      msg.textContent = texto;
+      msg.className = "msg " + tipo;
+    }
+
+    async function carregar() {
+      tabela.innerHTML = "";
+      setMsg("Carregando histórico...", "info");
+
+      const lancRes = await supabaseClient
+        .from("lancamentos_producao")
+        .select("id, usuario_id, obra_id, bloco_id, tipo_servico_id, quantidade, created_at")
+        .order("created_at", { ascending: false });
+
+      console.log("lancamentos:", lancRes);
+
+      if (lancRes.error) {
+        setMsg("Erro ao carregar lançamentos: " + lancRes.error.message, "erro");
+        return;
+      }
+
+      const lancamentos = lancRes.data || [];
+
+      if (lancamentos.length === 0) {
+        setMsg("Nenhum lançamento encontrado.", "erro");
+        return;
+      }
+
+      const usuarioIds = [...new Set(lancamentos.map(x => x.usuario_id).filter(Boolean))];
+      const obraIds = [...new Set(lancamentos.map(x => x.obra_id).filter(Boolean))];
+      const blocoIds = [...new Set(lancamentos.map(x => x.bloco_id).filter(Boolean))];
+      const servicoIds = [...new Set(lancamentos.map(x => x.tipo_servico_id).filter(Boolean))];
+
+      const [usuariosRes, obrasRes, blocosRes, servicosRes] = await Promise.all([
+        usuarioIds.length
+          ? supabaseClient.from("usuarios").select("id, nome").in("id", usuarioIds)
+          : Promise.resolve({ data: [], error: null }),
+        obraIds.length
+          ? supabaseClient.from("obras").select("id, nome").in("id", obraIds)
+          : Promise.resolve({ data: [], error: null }),
+        blocoIds.length
+          ? supabaseClient.from("blocos").select("id, nome").in("id", blocoIds)
+          : Promise.resolve({ data: [], error: null }),
+        servicoIds.length
+          ? supabaseClient.from("tipos_servico").select("id, nome").in("id", servicoIds)
+          : Promise.resolve({ data: [], error: null })
+      ]);
+
+      console.log("usuarios:", usuariosRes);
+      console.log("obras:", obrasRes);
+      console.log("blocos:", blocosRes);
+      console.log("servicos:", servicosRes);
+
+      if (usuariosRes.error || obrasRes.error || blocosRes.error || servicosRes.error) {
+        setMsg("Erro ao carregar dados auxiliares.", "erro");
+        return;
+      }
+
+      const usuariosMap = Object.fromEntries((usuariosRes.data || []).map(x => [x.id, x.nome]));
+      const obrasMap = Object.fromEntries((obrasRes.data || []).map(x => [x.id, x.nome]));
+      const blocosMap = Object.fromEntries((blocosRes.data || []).map(x => [x.id, x.nome]));
+      const servicosMap = Object.fromEntries((servicosRes.data || []).map(x => [x.id, x.nome]));
+
+      lancamentos.forEach(item => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${usuariosMap[item.usuario_id] || ""}</td>
+          <td>${obrasMap[item.obra_id] || ""}</td>
+          <td>${blocosMap[item.bloco_id] || ""}</td>
+          <td>${servicosMap[item.tipo_servico_id] || ""}</td>
+          <td>${item.quantidade ?? ""}</td>
+        `;
+        tabela.appendChild(tr);
+      });
+
+      setMsg("Histórico carregado com sucesso.", "ok");
+    }
+
+    carregar();
+  </script>
+</body>
+</html>

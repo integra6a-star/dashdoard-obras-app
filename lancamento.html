@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lançamento de Produção</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f7fb;
+      margin: 0;
+    }
+
+    .card {
+      max-width: 520px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    }
+
+    h2 {
+      margin-top: 0;
+      margin-bottom: 18px;
+    }
+
+    label {
+      display: block;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      font-weight: bold;
+    }
+
+    select, input, button {
+      width: 100%;
+      padding: 10px;
+      font-size: 15px;
+      border: 1px solid #cfd6e4;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 18px;
+      background: #0d6efd;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:hover {
+      opacity: 0.95;
+    }
+
+    #msg {
+      margin-top: 14px;
+      font-weight: bold;
+      white-space: pre-line;
+    }
+
+    .ok { color: #198754; }
+    .erro { color: #b02a37; }
+    .info { color: #0a58ca; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Lançamento de Produção</h2>
+
+    <label for="usuario">Usuário</label>
+    <select id="usuario">
+      <option value="">Carregando...</option>
+    </select>
+
+    <label for="obra">Obra</label>
+    <select id="obra">
+      <option value="">Carregando...</option>
+    </select>
+
+    <label for="bloco">Bloco</label>
+    <select id="bloco">
+      <option value="">Selecione a obra</option>
+    </select>
+
+    <label for="servico">Serviço</label>
+    <select id="servico">
+      <option value="">Carregando...</option>
+    </select>
+
+    <label for="quantidade">Quantidade</label>
+    <input id="quantidade" type="number" step="0.01" min="0" placeholder="Digite a quantidade" />
+
+    <button id="btnSalvar" type="button">Salvar</button>
+
+    <p id="msg" class="info"></p>
+  </div>
+
+  <script>
+    const supabaseClient = window.supabase.createClient(
+      "https://mhgcuzltxwkzezonqcyz.supabase.co",
+      "sb_publishable_aUXMKggmg99icSo5hRUZUg_2WF_qdEA"
+    );
+
+    const elUsuario = document.getElementById("usuario");
+    const elObra = document.getElementById("obra");
+    const elBloco = document.getElementById("bloco");
+    const elServico = document.getElementById("servico");
+    const elQuantidade = document.getElementById("quantidade");
+    const elMsg = document.getElementById("msg");
+    const elBtnSalvar = document.getElementById("btnSalvar");
+
+    function setMsg(texto, tipo = "info") {
+      elMsg.textContent = texto;
+      elMsg.className = tipo;
+    }
+
+    function preencher(id, dados, placeholder = "Selecione") {
+      const select = document.getElementById(id);
+      select.innerHTML = "";
+
+      const optInicial = document.createElement("option");
+      optInicial.value = "";
+      optInicial.text = placeholder;
+      select.appendChild(optInicial);
+
+      if (!dados || dados.length === 0) {
+        return;
+      }
+
+      dados.forEach(d => {
+        const opt = document.createElement("option");
+        opt.value = d.id;
+        opt.text = d.nome;
+        select.appendChild(opt);
+      });
+    }
+
+    async function carregar() {
+      try {
+        setMsg("Carregando dados...", "info");
+        console.log("Carregando dados...");
+
+        const usuarios = await supabaseClient.from("usuarios").select("*");
+        const obras = await supabaseClient.from("obras").select("*");
+        const servicos = await supabaseClient.from("tipos_servico").select("*");
+
+        console.log("usuarios:", usuarios);
+        console.log("obras:", obras);
+        console.log("servicos:", servicos);
+
+        if (usuarios.error) throw new Error("Usuários: " + usuarios.error.message);
+        if (obras.error) throw new Error("Obras: " + obras.error.message);
+        if (servicos.error) throw new Error("Serviços: " + servicos.error.message);
+
+        preencher("usuario", usuarios.data, "Selecione o usuário");
+        preencher("obra", obras.data, "Selecione a obra");
+        preencher("servico", servicos.data, "Selecione o serviço");
+
+        await carregarBlocos();
+
+        setMsg("Dados carregados com sucesso.", "ok");
+      } catch (error) {
+        console.error(error);
+        setMsg("Erro ao carregar dados: " + error.message, "erro");
+      }
+    }
+
+    async function carregarBlocos() {
+      try {
+        const obra = elObra.value;
+
+        if (!obra) {
+          preencher("bloco", [], "Selecione a obra");
+          return;
+        }
+
+        const blocos = await supabaseClient
+          .from("blocos")
+          .select("*")
+          .eq("obra_id", obra);
+
+        console.log("blocos:", blocos);
+
+        if (blocos.error) throw new Error("Blocos: " + blocos.error.message);
+
+        preencher("bloco", blocos.data, "Selecione o bloco");
+      } catch (error) {
+        console.error(error);
+        setMsg("Erro ao carregar blocos: " + error.message, "erro");
+      }
+    }
+
+    async function salvar() {
+      try {
+        const usuarioId = elUsuario.value;
+        const obraId = elObra.value;
+        const blocoId = elBloco.value;
+        const servicoId = elServico.value;
+        const quantidade = Number(elQuantidade.value);
+
+        if (!usuarioId) {
+          setMsg("Selecione o usuário.", "erro");
+          return;
+        }
+
+        if (!obraId) {
+          setMsg("Selecione a obra.", "erro");
+          return;
+        }
+
+        if (!blocoId) {
+          setMsg("Selecione o bloco.", "erro");
+          return;
+        }
+
+        if (!servicoId) {
+          setMsg("Selecione o serviço.", "erro");
+          return;
+        }
+
+        if (!quantidade || quantidade <= 0) {
+          setMsg("Digite uma quantidade válida.", "erro");
+          return;
+        }
+
+        elBtnSalvar.disabled = true;
+        setMsg("Salvando...", "info");
+
+        const res = await supabaseClient.from("lancamentos_producao").insert([{
+          usuario_id: usuarioId,
+          obra_id: obraId,
+          bloco_id: blocoId,
+          tipo_servico_id: servicoId,
+          quantidade: quantidade,
+          status: "pendente"
+        }]);
+
+        console.log("resultado salvar:", res);
+
+        if (res.error) {
+          setMsg("Erro: " + res.error.message, "erro");
+        } else {
+          elQuantidade.value = "";
+          setMsg("Salvo com sucesso!", "ok");
+        }
+      } catch (error) {
+        console.error(error);
+        setMsg("Erro ao salvar: " + error.message, "erro");
+      } finally {
+        elBtnSalvar.disabled = false;
+      }
+    }
+
+    elObra.addEventListener("change", carregarBlocos);
+    elBtnSalvar.addEventListener("click", salvar);
+
+    carregar();
+  </script>
+</body>
+</html>

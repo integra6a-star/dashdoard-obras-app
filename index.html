@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard de Produção</title>
+  <link rel="manifest" href="manifest.json">
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f7fb;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+    }
+
+    .filtros, .bloco {
+      background: white;
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+
+    .filtros-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(180px, 1fr));
+      gap: 16px;
+      align-items: end;
+    }
+
+    .filtros label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+
+    .filtros select,
+    .filtros input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #cfd6e4;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    }
+
+    .titulo {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .valor {
+      font-size: 30px;
+      font-weight: bold;
+      color: #0d6efd;
+    }
+
+    .msg {
+      margin: 12px 0 18px;
+      font-weight: bold;
+    }
+
+    .ok { color: #198754; }
+    .erro { color: #b02a37; }
+    .info { color: #0a58ca; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+
+    th {
+      background: #0d6efd;
+      color: white;
+    }
+
+    @media (max-width: 1100px) {
+      .cards {
+        grid-template-columns: repeat(2, minmax(180px, 1fr));
+      }
+    }
+
+    @media (max-width: 900px) {
+      .cards,
+      .filtros-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Dashboard de Produção</h1>
+  <div id="msg" class="msg info">Carregando dashboard...</div>
+
+  <div class="filtros">
+    <div class="filtros-grid">
+      <div>
+        <label for="filtroObra">Filtrar por obra</label>
+        <select id="filtroObra">
+          <option value="">Todas as obras</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="dataInicio">Data inicial</label>
+        <input type="date" id="dataInicio" />
+      </div>
+
+      <div>
+        <label for="dataFim">Data final</label>
+        <input type="date" id="dataFim" />
+      </div>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="titulo">Meta do mês (Rede)</div>
+      <div class="valor" id="metaMes">0</div>
+    </div>
+
+    <div class="card">
+      <div class="titulo">Produção do mês (Rede)</div>
+      <div class="valor" id="realMes">0</div>
+    </div>
+
+    <div class="card">
+      <div class="titulo">Saldo do mês</div>
+      <div class="valor" id="saldoMes">0</div>
+    </div>
+
+    <div class="card">
+      <div class="titulo">% Atingido</div>
+      <div class="valor" id="percentualMes">0%</div>
+    </div>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="titulo">Total de lançamentos</div>
+      <div class="valor" id="totalLancamentos">0</div>
+    </div>
+
+    <div class="card">
+      <div class="titulo">Quantidade total lançada</div>
+      <div class="valor" id="totalQuantidade">0</div>
+    </div>
+
+    <div class="card">
+      <div class="titulo">Total de serviços com produção</div>
+      <div class="valor" id="totalServicos">0</div>
+    </div>
+
+    <div class="card">
+      <div class="titulo">Mês de referência</div>
+      <div class="valor" id="mesReferencia" style="font-size: 22px;">-</div>
+    </div>
+  </div>
+
+  <div class="bloco">
+    <h3>Produção por Serviço</h3>
+    <canvas id="graficoServicos"></canvas>
+  </div>
+
+  <div class="bloco">
+    <h3>Curva de Produção por Dia</h3>
+    <canvas id="graficoDias"></canvas>
+  </div>
+
+  <div class="bloco">
+    <h3>Resumo por Serviço</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Serviço</th>
+          <th>Quantidade Total</th>
+        </tr>
+      </thead>
+      <tbody id="tabelaResumo"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const supabaseClient = window.supabase.createClient(
+      "https://mhgcuzltxwkzezonqcyz.supabase.co",
+      "sb_publishable_aUXMKggmg99icSo5hRUZUg_2WF_qdEA"
+    );
+
+    const elMsg = document.getElementById("msg");
+    const elFiltroObra = document.getElementById("filtroObra");
+    const elDataInicio = document.getElementById("dataInicio");
+    const elDataFim = document.getElementById("dataFim");
+
+    const elMetaMes = document.getElementById("metaMes");
+    const elRealMes = document.getElementById("realMes");
+    const elSaldoMes = document.getElementById("saldoMes");
+    const elPercentualMes = document.getElementById("percentualMes");
+
+    const elTotalLancamentos = document.getElementById("totalLancamentos");
+    const elTotalQuantidade = document.getElementById("totalQuantidade");
+    const elTotalServicos = document.getElementById("totalServicos");
+    const elMesReferencia = document.getElementById("mesReferencia");
+    const elTabelaResumo = document.getElementById("tabelaResumo");
+
+    let chartServicos = null;
+    let chartDias = null;
+
+    function setMsg(texto, tipo = "info") {
+      elMsg.textContent = texto;
+      elMsg.className = "msg " + tipo;
+    }
+
+    function formatarNumero(valor) {
+      return Number(valor || 0).toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function obterMesAnoReferencia() {
+      const base = elDataInicio.value ? new Date(elDataInicio.value + "T00:00:00") : new Date();
+      return {
+        mes: base.getMonth() + 1,
+        ano: base.getFullYear()
+      };
+    }
+
+    function nomeMes(mes) {
+      const nomes = [
+        "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+        "Jul", "Ago", "Set", "Out", "Nov", "Dez"
+      ];
+      return nomes[mes - 1] || "-";
+    }
+
+    async function carregarObras() {
+      const res = await supabaseClient
+        .from("obras")
+        .select("id, nome")
+        .order("nome");
+
+      if (res.error) {
+        setMsg("Erro ao carregar obras: " + res.error.message, "erro");
+        return;
+      }
+
+      elFiltroObra.innerHTML = `<option value="">Todas as obras</option>`;
+
+      (res.data || []).forEach(obra => {
+        const opt = document.createElement("option");
+        opt.value = obra.id;
+        opt.textContent = obra.nome;
+        elFiltroObra.appendChild(opt);
+      });
+    }
+
+    async function carregarDashboard() {
+      setMsg("Carregando dashboard...", "info");
+
+      let query = supabaseClient
+        .from("lancamentos_producao")
+        .select("id, quantidade, tipo_servico_id, obra_id, data_lancamento");
+
+      if (elFiltroObra.value) {
+        query = query.eq("obra_id", elFiltroObra.value);
+      }
+
+      if (elDataInicio.value) {
+        query = query.gte("data_lancamento", elDataInicio.value);
+      }
+
+      if (elDataFim.value) {
+        query = query.lte("data_lancamento", elDataFim.value);
+      }
+
+      const lancRes = await query;
+
+      if (lancRes.error) {
+        setMsg("Erro ao carregar lançamentos: " + lancRes.error.message, "erro");
+        return;
+      }
+
+      const lancamentos = lancRes.data || [];
+
+      const { mes, ano } = obterMesAnoReferencia();
+      elMesReferencia.textContent = `${nomeMes(mes)}/${ano}`;
+
+      let metaQuery = supabaseClient
+        .from("metas_rede_mensal")
+        .select("meta_rede, obra_id, mes, ano")
+        .eq("mes", mes)
+        .eq("ano", ano);
+
+      if (elFiltroObra.value) {
+        metaQuery = metaQuery.eq("obra_id", elFiltroObra.value);
+      }
+
+      const metaRes = await metaQuery;
+
+      if (metaRes.error) {
+        setMsg("Erro ao carregar meta mensal: " + metaRes.error.message, "erro");
+        return;
+      }
+
+      const metas = metaRes.data || [];
+      const metaMes = metas.reduce((acc, item) => acc + Number(item.meta_rede || 0), 0);
+
+      if (lancamentos.length === 0) {
+        elMetaMes.textContent = formatarNumero(metaMes);
+        elRealMes.textContent = formatarNumero(0);
+        elSaldoMes.textContent = formatarNumero(0 - metaMes);
+        elPercentualMes.textContent = "0.0%";
+
+        elTotalLancamentos.textContent = "0";
+        elTotalQuantidade.textContent = formatarNumero(0);
+        elTotalServicos.textContent = "0";
+        elTabelaResumo.innerHTML = "";
+
+        if (chartServicos) {
+          chartServicos.destroy();
+          chartServicos = null;
+        }
+
+        if (chartDias) {
+          chartDias.destroy();
+          chartDias = null;
+        }
+
+        setMsg("Nenhum lançamento encontrado para esse filtro.", "erro");
+        return;
+      }
+
+      const servicoIds = [...new Set(lancamentos.map(x => x.tipo_servico_id).filter(Boolean))];
+
+      const servRes = await supabaseClient
+        .from("tipos_servico")
+        .select("id, nome")
+        .in("id", servicoIds);
+
+      if (servRes.error) {
+        setMsg("Erro ao carregar serviços: " + servRes.error.message, "erro");
+        return;
+      }
+
+      const servicosMap = Object.fromEntries((servRes.data || []).map(x => [x.id, x.nome]));
+
+      const totalLancamentos = lancamentos.length;
+      const totalQuantidade = lancamentos.reduce((acc, item) => acc + Number(item.quantidade || 0), 0);
+
+      const agrupadoServicos = {};
+      lancamentos.forEach(item => {
+        const nomeServico = servicosMap[item.tipo_servico_id] || "Sem nome";
+        agrupadoServicos[nomeServico] = (agrupadoServicos[nomeServico] || 0) + Number(item.quantidade || 0);
+      });
+
+      const labelsServicos = Object.keys(agrupadoServicos);
+      const valoresServicos = Object.values(agrupadoServicos);
+
+      elTotalLancamentos.textContent = totalLancamentos;
+      elTotalQuantidade.textContent = formatarNumero(totalQuantidade);
+      elTotalServicos.textContent = labelsServicos.length;
+
+      const realizadoRedeMes = lancamentos.reduce((acc, item) => {
+        const nomeServico = servicosMap[item.tipo_servico_id] || "";
+        const ehRede = nomeServico.toLowerCase() === "rede coletora";
+
+        if (!ehRede) return acc;
+
+        const data = item.data_lancamento ? new Date(item.data_lancamento + "T00:00:00") : null;
+        if (!data) return acc;
+
+        if ((data.getMonth() + 1) === mes && data.getFullYear() === ano) {
+          return acc + Number(item.quantidade || 0);
+        }
+
+        return acc;
+      }, 0);
+
+      const saldoMes = realizadoRedeMes - metaMes;
+      const percentualMes = metaMes > 0 ? (realizadoRedeMes / metaMes) * 100 : 0;
+
+      elMetaMes.textContent = formatarNumero(metaMes);
+      elRealMes.textContent = formatarNumero(realizadoRedeMes);
+      elSaldoMes.textContent = formatarNumero(saldoMes);
+      elPercentualMes.textContent = percentualMes.toFixed(1) + "%";
+
+      elTabelaResumo.innerHTML = "";
+      labelsServicos.forEach((label, i) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${label}</td>
+          <td>${formatarNumero(valoresServicos[i])}</td>
+        `;
+        elTabelaResumo.appendChild(tr);
+      });
+
+      const ctxServicos = document.getElementById("graficoServicos");
+
+      if (chartServicos) {
+        chartServicos.destroy();
+      }
+
+      chartServicos = new Chart(ctxServicos, {
+        type: "bar",
+        data: {
+          labels: labelsServicos,
+          datasets: [{
+            label: "Quantidade",
+            data: valoresServicos
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: true }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+
+      const agrupadoDias = {};
+      lancamentos.forEach(item => {
+        const data = item.data_lancamento || "Sem data";
+        agrupadoDias[data] = (agrupadoDias[data] || 0) + Number(item.quantidade || 0);
+      });
+
+      const labelsDias = Object.keys(agrupadoDias).sort();
+      const valoresDias = labelsDias.map(data => agrupadoDias[data]);
+
+      const ctxDias = document.getElementById("graficoDias");
+
+      if (chartDias) {
+        chartDias.destroy();
+      }
+
+      chartDias = new Chart(ctxDias, {
+        type: "line",
+        data: {
+          labels: labelsDias,
+          datasets: [{
+            label: "Produção por dia",
+            data: valoresDias,
+            tension: 0.2
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: true }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+
+      setMsg("Dashboard carregado com sucesso.", "ok");
+    }
+
+    elFiltroObra.addEventListener("change", carregarDashboard);
+    elDataInicio.addEventListener("change", carregarDashboard);
+    elDataFim.addEventListener("change", carregarDashboard);
+
+    async function iniciar() {
+      await carregarObras();
+      await carregarDashboard();
+    }
+
+    iniciar();
+  </script>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js")
+        .then(() => console.log("Service Worker registrado"))
+        .catch(err => console.error("Erro ao registrar Service Worker:", err));
+    }
+  </script>
+</body>
+</html>
