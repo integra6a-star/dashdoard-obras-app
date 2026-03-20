@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Histórico de Produção</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --primary: #0d6efd;
+      --primary-dark: #0b5ed7;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #dbe3ef;
+      --success: #198754;
+      --danger: #b02a37;
+      --shadow: 0 8px 24px rgba(0,0,0,0.08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: var(--bg); margin: 0; color: var(--text); }
+
+    .topbar {
+      background: linear-gradient(135deg, var(--primary), #3a86ff);
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .brand { font-size: 20px; font-weight: bold; }
+    .nav { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+    .nav a, .nav button {
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.15);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 10px 14px;
+      border-radius: 12px;
+    }
+
+    .nav .ativo { background: rgba(255,255,255,0.24); }
+
+    .container { padding: 20px; max-width: 1280px; margin: 0 auto; }
+    h2 { margin: 0 0 14px; }
+
+    .msg { margin: 10px 0 16px; font-weight: bold; min-height: 18px; }
+    .ok { color: var(--success); }
+    .erro { color: var(--danger); }
+    .info { color: var(--primary); }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 14px;
+      overflow: hidden;
+      min-width: 900px;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #e9eef5;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: var(--primary); color: white; }
+    tbody tr:hover { background: #f8fbff; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">Integra 6A</div>
+    <div class="nav">
+      <a href="dashboard.html">Dashboard</a>
+      <a href="lancamento.html">Lançamento</a>
+      <a href="historico.html" class="ativo">Histórico</a>
+      <button id="btnSair" type="button">Sair</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <h2>Histórico de Produção</h2>
+      <div id="msg" class="msg info">Carregando...</div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Usuário</th>
+              <th>Obra</th>
+              <th>Bloco</th>
+              <th>Serviço</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="tabela"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://mhgcuzltxwkzezonqcyz.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_aUXMKggmg99icSo5hRUZUg_2WF_qdEA";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const msg = document.getElementById("msg");
+    const tabela = document.getElementById("tabela");
+    const elBtnSair = document.getElementById("btnSair");
+
+    function setMsg(texto, tipo = "info") {
+      msg.textContent = texto;
+      msg.className = "msg " + tipo;
+    }
+
+    function formatarData(dataIso) {
+      if (!dataIso) return "";
+      const data = new Date(dataIso);
+      if (Number.isNaN(data.getTime())) return "";
+      return data.toLocaleString("pt-BR");
+    }
+
+    async function protegerPagina() {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error || !data?.session) {
+        window.location.replace("login.html");
+        return null;
+      }
+      return data.session;
+    }
+
+    async function sair() {
+      await supabaseClient.auth.signOut();
+      window.location.replace("login.html");
+    }
+
+    async function carregar() {
+      tabela.innerHTML = "";
+      setMsg("Carregando histórico...", "info");
+
+      const lancRes = await supabaseClient
+        .from("lancamentos_producao")
+        .select("id, usuario_id, obra_id, bloco_id, tipo_servico_id, quantidade, created_at")
+        .order("created_at", { ascending: false });
+
+      if (lancRes.error) {
+        setMsg("Erro ao carregar lançamentos: " + lancRes.error.message, "erro");
+        return;
+      }
+
+      const lancamentos = lancRes.data || [];
+
+      if (lancamentos.length === 0) {
+        setMsg("Nenhum lançamento encontrado.", "info");
+        return;
+      }
+
+      const usuarioIds = [...new Set(lancamentos.map(x => x.usuario_id).filter(Boolean))];
+      const obraIds = [...new Set(lancamentos.map(x => x.obra_id).filter(Boolean))];
+      const blocoIds = [...new Set(lancamentos.map(x => x.bloco_id).filter(Boolean))];
+      const servicoIds = [...new Set(lancamentos.map(x => x.tipo_servico_id).filter(Boolean))];
+
+      const [usuariosRes, obrasRes, blocosRes, servicosRes] = await Promise.all([
+        usuarioIds.length ? supabaseClient.from("usuarios").select("id, nome").in("id", usuarioIds) : Promise.resolve({ data: [], error: null }),
+        obraIds.length ? supabaseClient.from("obras").select("id, nome").in("id", obraIds) : Promise.resolve({ data: [], error: null }),
+        blocoIds.length ? supabaseClient.from("blocos").select("id, nome").in("id", blocoIds) : Promise.resolve({ data: [], error: null }),
+        servicoIds.length ? supabaseClient.from("tipos_servico").select("id, nome").in("id", servicoIds) : Promise.resolve({ data: [], error: null })
+      ]);
+
+      if (usuariosRes.error || obrasRes.error || blocosRes.error || servicosRes.error) {
+        setMsg("Erro ao carregar dados auxiliares.", "erro");
+        return;
+      }
+
+      const usuariosMap = Object.fromEntries((usuariosRes.data || []).map(x => [x.id, x.nome]));
+      const obrasMap = Object.fromEntries((obrasRes.data || []).map(x => [x.id, x.nome]));
+      const blocosMap = Object.fromEntries((blocosRes.data || []).map(x => [x.id, x.nome]));
+      const servicosMap = Object.fromEntries((servicosRes.data || []).map(x => [x.id, x.nome]));
+
+      lancamentos.forEach(item => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${formatarData(item.created_at)}</td>
+          <td>${usuariosMap[item.usuario_id] || "-"}</td>
+          <td>${obrasMap[item.obra_id] || "-"}</td>
+          <td>${blocosMap[item.bloco_id] || "-"}</td>
+          <td>${servicosMap[item.tipo_servico_id] || "-"}</td>
+          <td>${item.quantidade ?? "-"}</td>
+        `;
+        tabela.appendChild(tr);
+      });
+
+      setMsg(`Histórico carregado com sucesso. ${lancamentos.length} registro(s) encontrado(s).`, "ok");
+    }
+
+    elBtnSair.addEventListener("click", sair);
+
+    (async function iniciar() {
+      const sessao = await protegerPagina();
+      if (!sessao) return;
+      await carregar();
+    })();
+  </script>
+</body>
+</html>

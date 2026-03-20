@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard - Sistema de Produção</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --primary: #0d6efd;
+      --primary-dark: #0b5ed7;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --success: #198754;
+      --danger: #b02a37;
+      --shadow: 0 10px 30px rgba(0,0,0,0.08);
+      --radius: 18px;
+      --border: #e5edf7;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+    .topbar {
+      background: linear-gradient(135deg, var(--primary), #3a86ff);
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      box-shadow: 0 6px 18px rgba(13,110,253,0.2);
+    }
+
+    .brand-wrap h1 { margin: 0; font-size: 22px; }
+    .brand-wrap p { margin: 4px 0 0; opacity: 0.9; font-size: 14px; }
+
+    .nav { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .nav a, .nav button {
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.15);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 10px 14px;
+      border-radius: 12px;
+    }
+
+    .nav a.ativo { background: rgba(255,255,255,0.24); }
+    .nav button:hover, .nav a:hover { background: rgba(255,255,255,0.22); }
+
+    .container { padding: 24px; max-width: 1200px; margin: 0 auto; }
+    .headline { margin-bottom: 18px; }
+    .headline h2 { margin: 0 0 6px; }
+    .headline p { margin: 0; color: var(--muted); }
+
+    .msg { margin: 12px 0 18px; font-weight: bold; min-height: 20px; }
+    .ok { color: var(--success); }
+    .erro { color: var(--danger); }
+    .info { color: var(--primary); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .card h3 { margin: 0 0 10px; font-size: 16px; color: var(--muted); }
+    .card .valor { font-size: 32px; font-weight: bold; margin: 0; }
+    .card .desc { margin-top: 8px; color: var(--muted); font-size: 14px; }
+
+    .actions {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px;
+    }
+
+    .action-card a {
+      display: inline-block;
+      margin-top: 12px;
+      background: var(--primary);
+      color: white;
+      text-decoration: none;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-weight: bold;
+    }
+
+    .action-card a:hover { background: var(--primary-dark); }
+
+    .footer-note {
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand-wrap">
+      <h1>Integra 6A</h1>
+      <p>Painel principal do sistema de produção</p>
+    </div>
+
+    <div class="nav">
+      <a href="dashboard.html" class="ativo">Dashboard</a>
+      <a href="lancamento.html">Lançamento</a>
+      <a href="historico.html">Histórico</a>
+      <button id="btnSair" type="button">Sair</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="headline">
+      <h2>Dashboard</h2>
+      <p>Acompanhe os principais números dos lançamentos cadastrados.</p>
+    </div>
+
+    <div id="msg" class="msg info">Validando sessão...</div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Total de lançamentos</h3>
+        <p id="totalLancamentos" class="valor">--</p>
+        <div class="desc">Quantidade de registros na base.</div>
+      </div>
+
+      <div class="card">
+        <h3>Quantidade total</h3>
+        <p id="totalQuantidade" class="valor">--</p>
+        <div class="desc">Soma de todas as quantidades lançadas.</div>
+      </div>
+
+      <div class="card">
+        <h3>Último lançamento</h3>
+        <p id="ultimoLancamento" class="valor" style="font-size:20px;">--</p>
+        <div class="desc">Data e hora do registro mais recente.</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <div class="card action-card">
+        <h3>Lançamento de produção</h3>
+        <p class="desc">Abra a página de cadastro para inserir novos apontamentos.</p>
+        <a href="lancamento.html">Ir para lançamento</a>
+      </div>
+
+      <div class="card action-card">
+        <h3>Histórico</h3>
+        <p class="desc">Veja todos os lançamentos registrados com detalhes.</p>
+        <a href="historico.html">Abrir histórico</a>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      Observação: para o botão de lançamento funcionar, o arquivo <strong>lancamento.html</strong> precisa estar na mesma pasta.
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://mhgcuzltxwkzezonqcyz.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_aUXMKggmg99icSo5hRUZUg_2WF_qdEA";
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const elMsg = document.getElementById("msg");
+    const elBtnSair = document.getElementById("btnSair");
+    const elTotalLancamentos = document.getElementById("totalLancamentos");
+    const elTotalQuantidade = document.getElementById("totalQuantidade");
+    const elUltimoLancamento = document.getElementById("ultimoLancamento");
+
+    function setMsg(texto, tipo = "info") {
+      elMsg.textContent = texto;
+      elMsg.className = "msg " + tipo;
+    }
+
+    function formatarData(dataIso) {
+      if (!dataIso) return "--";
+      const data = new Date(dataIso);
+      if (Number.isNaN(data.getTime())) return "--";
+      return data.toLocaleString("pt-BR");
+    }
+
+    async function protegerPagina() {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error || !data?.session) {
+        window.location.replace("login.html");
+        return null;
+      }
+      return data.session;
+    }
+
+    async function sair() {
+      await supabaseClient.auth.signOut();
+      window.location.replace("login.html");
+    }
+
+    async function carregarDashboard() {
+      setMsg("Carregando indicadores...", "info");
+
+      const { data, error } = await supabaseClient
+        .from("lancamentos_producao")
+        .select("id, quantidade, created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        setMsg("Erro ao carregar dashboard: " + error.message, "erro");
+        return;
+      }
+
+      const registros = data || [];
+      const totalLancamentos = registros.length;
+      const totalQuantidade = registros.reduce((acc, item) => acc + (Number(item.quantidade) || 0), 0);
+      const ultimoLancamento = registros[0]?.created_at || null;
+
+      elTotalLancamentos.textContent = totalLancamentos;
+      elTotalQuantidade.textContent = totalQuantidade.toLocaleString("pt-BR");
+      elUltimoLancamento.textContent = formatarData(ultimoLancamento);
+
+      setMsg("Dashboard carregado com sucesso.", "ok");
+    }
+
+    elBtnSair.addEventListener("click", sair);
+
+    (async function iniciar() {
+      const sessao = await protegerPagina();
+      if (!sessao) return;
+      await carregarDashboard();
+    })();
+  </script>
+</body>
+</html>
