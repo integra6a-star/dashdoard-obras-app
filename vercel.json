@@ -1,0 +1,31 @@
+{
+  "routes": [
+    {
+      "src": "/",
+      "dest": "/login.html"
+    },
+    {
+      "src": "/dashboard",
+      "dest": "/dashboard.html"
+    },
+    {
+      "src": "/lancamento",
+      "dest": "/lancamento.html"
+    },
+    {
+      "src": "/historico",
+      "dest": "/historico.html"
+    },
+    {
+      "src": "/manifest.json",
+      "dest": "/manifest.json"
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/sw.js"
+    },
+    {
+      "handle": "filesystem"
+    }
+  ]
+}
